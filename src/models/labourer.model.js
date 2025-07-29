@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const labourerSchema = new mongoose.schema({
+const labourerSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
@@ -11,9 +11,9 @@ const labourerSchema = new mongoose.schema({
   },
 
   age: {
-    type: String,
-    required: [true, " Age is required"],
-  },
+  type: Number,
+  required: [true, "Age is required"],
+},
   gender: {
     type: String,
     enum: ["male", "female", "others"],
@@ -40,16 +40,6 @@ const labourerSchema = new mongoose.schema({
     type: String,
     required: [true, " Skill Type is required"],
   },
-  profilePhoto: {
-    publicId: {
-      type: String,
-      required: true,
-    },
-    url: {
-      type: String,
-      required: true,
-    },
-  }, // URL
 
   status: {
     type: String,

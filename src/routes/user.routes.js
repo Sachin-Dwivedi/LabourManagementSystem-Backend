@@ -25,7 +25,7 @@ router.route("/profile").put(isAuthenticated, updateUser);
 router.route("/change-password").put(isAuthenticated, changePassword);
 
 // Admin-only routes
-router.route("/users").get(isAuthenticated, isAuthorized("admin"), listAllUsers);
+router.route("/users").get(isAuthenticated, isAuthorized("admin"),listAllUsers);
 router.route("/users/role").put(isAuthenticated, isAuthorized("admin"), updateUserRole);
 router.route("/users/:userId").delete(isAuthenticated, isAuthorized("admin"), deleteUser);
 

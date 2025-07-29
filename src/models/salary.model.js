@@ -1,35 +1,60 @@
-import mongoose from "mongoose"
+import mongoose from "mongoose";
 
-const salarySchema = new mongoose.Schema({
-  labourerId: {
-    type : mongoose.Schema.Types.ObjectId,
-    ref: "labourer"
+const salarySchema = new mongoose.Schema(
+  {
+    labourerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Labourer",
+      required: [true, "Labourer ID is required"],
+    },
+    startPeriod: {
+      type: Date,
+      required: [true, "Start period is required"],
+    },
+    endPeriod: {
+      type: Date,
+      required: [true, "End period is required"],
+      validate: {
+        validator: function (value) {
+          // endPeriod must be >= startPeriod
+          return !this.startPeriod || value >= this.startPeriod;
+        },
+        message: "End period must be greater than or equal to start period",
+      },
+    },
+    totalDaysPresent: {
+      type: Number,
+      required: [true, "Total Days Present is required"],
+      min: [0, "Total days present cannot be negative"],
+    },
+    dailyWage: {
+      type: Number,
+      required: [true, "Daily Wage is required"],
+      min: [0, "Daily wage cannot be negative"],
+    },
+    totalSalary: {
+      type: Number,
+      required: [true, "Total Salary is required"],
+      min: [0, "Total salary cannot be negative"],
+    },
+    status: {
+      type: String,
+      enum: ["pending", "paid"],
+      required: [true, "Status is required"],
+      default: "pending",
+    },
+    payslipUrl: {
+      type: String,
+      required: [true, "Pay slip URL is required"],
+    },
+    
+    paymentDate: {
+      type: Date,
+    },
   },
-  startPeriod: Date,
-  endPeriod: Date,
-  totalDaysPresent: {
-    type : Number,
-    required:[true,"Total Days Present is required"]
-  },
-  dailyWage:{
-    type : Number,
-    required:[true,"Daily Wage is required"]
-  },
-  totalSalary: {
-    type : Number,
-    required:[true,"Total Salary is required"]
-  },
-  status: {
-    type : String,
-    enum: ["pending", "paid"],
-    required:[true,"Status Present is required"]
-  },
-  payslipUrl: {
-    type : String,
-    required:[true,"Pay Slip Url is required"]
-  }
-})
+  { timestamps: true }
+);
 
-const Salary = mongoose.model("Salary", salarySchema)
+const Salary = mongoose.model("Salary", salarySchema);
 
 export default Salary;
