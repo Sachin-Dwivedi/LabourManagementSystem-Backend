@@ -1,5 +1,5 @@
 {
-    "version": 1,
+    "version": 2,
     "name": "labour_management_system_backend",
     "builds": [{ "src": "src/index.js", "use": "@vercel/node" }],
     "routes": [{ "src": "/(.*)", "dest": "src/index.js" }]
