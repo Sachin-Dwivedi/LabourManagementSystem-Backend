@@ -9,19 +9,12 @@ import {
   addRemarkToLeaveRequest,
 } from "../controllers/leave.controller.js";
 
-import { isAuthenticated, isAuthorized } from "../middlewares/auth.js"; // Adjust import path
+import { isAuthenticated, isAuthorized } from "../middlewares/auth.js";
 
 const router = Router();
 
-// Labourer applies for leave
-router.post(
-  "/apply",
-  isAuthenticated,
-  isAuthorized("labourer"),
-  applyForLeave
-);
+router.post("/apply", isAuthenticated, isAuthorized("labourer"), applyForLeave);
 
-// Manager/Admin approves leave request
 router.patch(
   "/:id/approve",
   isAuthenticated,
@@ -29,7 +22,6 @@ router.patch(
   approveLeave
 );
 
-// Manager/Admin rejects leave request
 router.patch(
   "/:id/reject",
   isAuthenticated,
@@ -37,14 +29,8 @@ router.patch(
   rejectLeave
 );
 
-// View leave status/history for a labourer
-router.get(
-  "/labourer/:labourerId",
-  isAuthenticated,
-  getLeaveStatusByLabourer
-);
+router.get("/labourer/:labourerId", isAuthenticated, getLeaveStatusByLabourer);
 
-// List all leave requests with filters (admin/manager)
 router.get(
   "/",
   isAuthenticated,
@@ -52,7 +38,6 @@ router.get(
   listLeaveRequests
 );
 
-// Labourer cancels their leave request (only pending allowed)
 router.delete(
   "/:id/cancel",
   isAuthenticated,
@@ -60,7 +45,6 @@ router.delete(
   cancelLeaveRequest
 );
 
-// Manager/Admin adds remarks to a leave request
 router.put(
   "/:id/remark",
   isAuthenticated,

@@ -1,4 +1,5 @@
 import Attendance from "../models/attendance.model.js";
+import Labourer from "../models/labourer.model.js";
 import ApiError from "../utils/error.js";
 import catchAsyncHandler from "../middlewares/catchAsyncHandler.js";
 import mongoose from "mongoose";
@@ -7,7 +8,6 @@ import { Parser as Json2csvParser } from "json2csv";
 export const markAttendance = catchAsyncHandler(async (req, res, next) => {
   const { labourerId, projectId, date, shift, status, markedBy } = req.body;
 
-  // 1. Validate required fields
   if (!labourerId || !projectId || !date || !shift || !status) {
     return next(
       new ApiError(
@@ -17,7 +17,6 @@ export const markAttendance = catchAsyncHandler(async (req, res, next) => {
     );
   }
 
-  // 2. Validate ObjectIds
   if (!mongoose.Types.ObjectId.isValid(labourerId)) {
     return next(new ApiError(400, "Invalid labourerId"));
   }
@@ -28,7 +27,6 @@ export const markAttendance = catchAsyncHandler(async (req, res, next) => {
     return next(new ApiError(400, "Invalid markedBy user ID"));
   }
 
-  // 3. Check for duplicate (enforce uniqueness)
   const exists = await Attendance.findOne({
     labourerId,
     projectId,
@@ -44,7 +42,6 @@ export const markAttendance = catchAsyncHandler(async (req, res, next) => {
     );
   }
 
-  // 4. Create the attendance record
   const attendance = await Attendance.create({
     labourerId,
     projectId,
@@ -60,12 +57,10 @@ export const markAttendance = catchAsyncHandler(async (req, res, next) => {
 export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
   const attendanceId = req.params.id;
 
-  // 1. Validate attendance ID
   if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
     return next(new ApiError(400, "Invalid attendance ID"));
   }
 
-  // 2. Allowed fields for update
   const allowedUpdates = [
     "labourerId",
     "projectId",
@@ -75,7 +70,6 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     "markedBy",
   ];
 
-  // 3. Extract update data and validate allowed fields only
   const updates = {};
   allowedUpdates.forEach((field) => {
     if (req.body[field] !== undefined) {
@@ -83,7 +77,6 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     }
   });
 
-  // 4. Validate ObjectId fields if present
   if (
     updates.labourerId &&
     !mongoose.Types.ObjectId.isValid(updates.labourerId)
@@ -100,7 +93,6 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     return next(new ApiError(400, "Invalid markedBy user ID"));
   }
 
-  // 5. Validate shift if provided
   if (updates.shift) {
     const allowedShifts = ["morning", "evening", "night"];
     if (!allowedShifts.includes(updates.shift)) {
@@ -110,7 +102,6 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     }
   }
 
-  // 6. Validate status if provided
   if (updates.status) {
     const allowedStatuses = ["present", "absent", "half-day"];
     if (!allowedStatuses.includes(updates.status)) {
@@ -123,18 +114,15 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     }
   }
 
-  // 7. Validate date if provided
   if (updates.date && isNaN(new Date(updates.date).getTime())) {
     return next(new ApiError(400, "Invalid date format"));
   }
 
-  // 8. Find existing attendance record
   const attendance = await Attendance.findById(attendanceId);
   if (!attendance) {
     return next(new ApiError(404, "Attendance record not found"));
   }
 
-  // 9. If unique keys might change, check for duplicate conflict
   if (
     updates.labourerId ||
     updates.projectId ||
@@ -164,57 +152,46 @@ export const updateAttendance = catchAsyncHandler(async (req, res, next) => {
     }
   }
 
-  // 10. Apply updates
   Object.assign(attendance, updates);
 
-  // 11. Save
   await attendance.save();
 
-  // 12. Return updated attendance record
   res.status(200).json({ attendance });
 });
 
 export const deleteAttendance = catchAsyncHandler(async (req, res, next) => {
   const attendanceId = req.params.id;
 
-  // 1. Validate attendance ID
   if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
     return next(new ApiError(400, "Invalid attendance ID"));
   }
 
-  // 2. Find attendance record by ID
   const attendance = await Attendance.findById(attendanceId);
   if (!attendance) {
     return next(new ApiError(404, "Attendance record not found"));
   }
 
-  // 3. Delete attendance record
   await Attendance.findByIdAndDelete(attendanceId);
 
-  // 4. Respond with success
   res.status(200).json({ message: "Attendance record deleted successfully" });
 });
 
 export const getAttendanceById = catchAsyncHandler(async (req, res, next) => {
   const attendanceId = req.params.id;
 
-  // 1. Validate attendance ID
   if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
     return next(new ApiError(400, "Invalid attendance ID"));
   }
 
-  // 2. Find attendance by ID and populate references
   const attendance = await Attendance.findById(attendanceId)
     .populate({ path: "labourerId", select: "fullName contactNumber" })
     .populate({ path: "projectId", select: "name location" })
     .populate({ path: "markedBy", select: "username email" });
 
-  // 3. Handle not found
   if (!attendance) {
     return next(new ApiError(404, "Attendance record not found"));
   }
 
-  // 4. Return found attendance
   res.status(200).json({ attendance });
 });
 export const getAttendanceByLabourer = catchAsyncHandler(
@@ -231,17 +208,14 @@ export const getAttendanceByLabourer = catchAsyncHandler(
       limit = 20,
     } = req.query;
 
-    // Validate labourerId
     if (!mongoose.Types.ObjectId.isValid(labourerId)) {
       return next(new ApiError(400, "Invalid labourer ID"));
     }
 
-    // Pagination
     page = parseInt(page, 10) > 0 ? parseInt(page, 10) : 1; // (page, 10 ka mtlb = base 10 number system) (default page = 1 if input page < 0)
     limit = parseInt(limit, 10) > 0 ? parseInt(limit, 10) : 20;
     const skip = (page - 1) * limit;
 
-    // Build filters
     const filters = { labourerId };
 
     if (projectId && mongoose.Types.ObjectId.isValid(projectId))
@@ -264,10 +238,8 @@ export const getAttendanceByLabourer = catchAsyncHandler(
       }
     }
 
-    // Count for pagination
     const total = await Attendance.countDocuments(filters);
 
-    // Fetch records with pagination and populate references
     const records = await Attendance.find(filters)
       .skip(skip)
       .limit(limit)
@@ -301,19 +273,16 @@ export const getAttendanceByProject = catchAsyncHandler(
       limit = 20,
     } = req.query;
 
-    // Validate projectId
     if (!mongoose.Types.ObjectId.isValid(projectId)) {
       return next(new ApiError(400, "Invalid project ID"));
     }
 
-    // Parse pagination params
     page = parseInt(page, 10);
     limit = parseInt(limit, 10);
     if (isNaN(page) || page < 1) page = 1;
     if (isNaN(limit) || limit < 1) limit = 20;
     const skip = (page - 1) * limit;
 
-    // Build filters with required projectId
     const filters = { projectId };
 
     if (labourerId && mongoose.Types.ObjectId.isValid(labourerId)) {
@@ -344,10 +313,8 @@ export const getAttendanceByProject = catchAsyncHandler(
       }
     }
 
-    // Count total matching records
     const total = await Attendance.countDocuments(filters);
 
-    // Fetch paginated attendance records with populated references
     const records = await Attendance.find(filters)
       .skip(skip)
       .limit(limit)
@@ -355,7 +322,6 @@ export const getAttendanceByProject = catchAsyncHandler(
       .populate({ path: "labourerId", select: "fullName contactNumber" })
       .populate({ path: "markedBy", select: "username email" });
 
-    // Respond with data and pagination meta
     res.status(200).json({
       meta: {
         total,
@@ -368,6 +334,7 @@ export const getAttendanceByProject = catchAsyncHandler(
   }
 );
 
+//Function to get Attendance Details by Date
 export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
   let {
     date,
@@ -380,7 +347,6 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
     limit = 20,
   } = req.query;
 
-  // 1. Validate date presence and correctness
   if (!date) {
     return next(new ApiError(400, "Date query parameter is required"));
   }
@@ -389,13 +355,10 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
     return next(new ApiError(400, "Invalid date format"));
   }
 
-  // Normalize pagination params
   page = parseInt(page, 10) > 0 ? parseInt(page, 10) : 1;
   limit = parseInt(limit, 10) > 0 ? parseInt(limit, 10) : 20;
   const skip = (page - 1) * limit;
 
-  // 2. Build filters: For date, it’s good to match on the full day.
-  // This means date >= start of day AND date < next day start
   const baseDate = new Date(date);
   const startOfDay = new Date(baseDate);
   startOfDay.setHours(0, 0, 0, 0);
@@ -406,7 +369,6 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
     date: { $gte: startOfDay, $lte: endOfDay },
   };
 
-  // 3. Validate and add other filters
   if (labourerId) {
     if (!mongoose.Types.ObjectId.isValid(labourerId)) {
       return next(new ApiError(400, "Invalid labourerId"));
@@ -451,10 +413,8 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
     filters.markedBy = markedBy;
   }
 
-  // 4. Count matching records
   const total = await Attendance.countDocuments(filters);
 
-  // 5. Query attendance records with pagination, sorting, and populate
   const records = await Attendance.find(filters)
     .skip(skip)
     .limit(limit)
@@ -463,7 +423,6 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
     .populate({ path: "projectId", select: "name location" })
     .populate({ path: "markedBy", select: "username email" });
 
-  // 6. Return response with metadata
   res.status(200).json({
     meta: {
       total,
@@ -475,17 +434,16 @@ export const getAttendanceByDate = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
+//Function to get Attendance Summary for a Labourer (total present, absent, halfday)
 export const getLabourerAttendanceSummary = catchAsyncHandler(
   async (req, res, next) => {
     const { labourerId } = req.params;
     const { startDate, endDate } = req.query;
 
-    // 1. Validate labourer ID
     if (!mongoose.Types.ObjectId.isValid(labourerId)) {
       return next(new ApiError(400, "Invalid labourer ID"));
     }
 
-    // 2. Build date filter if startDate and/or endDate are provided
     const dateFilter = {};
     if (startDate) {
       const start = new Date(startDate);
@@ -502,13 +460,13 @@ export const getLabourerAttendanceSummary = catchAsyncHandler(
       dateFilter.$lte = end;
     }
 
-    // 3. Build match condition for aggregation
-    const matchCondition = { labourerId: mongoose.Types.ObjectId(labourerId) };
+    const matchCondition = {
+      labourerId: new mongoose.Types.ObjectId(labourerId),
+    };
     if (startDate || endDate) {
       matchCondition.date = dateFilter;
     }
 
-    // 4. Run aggregation to count attendance by status
     const aggregationResult = await Attendance.aggregate([
       { $match: matchCondition },
       {
@@ -519,8 +477,6 @@ export const getLabourerAttendanceSummary = catchAsyncHandler(
       },
     ]);
 
-    // 5. Convert aggregation result into summary object
-    // Initialize counts to zero
     const summary = {
       present: 0,
       absent: 0,
@@ -533,13 +489,11 @@ export const getLabourerAttendanceSummary = catchAsyncHandler(
       else if (_id === "half-day") summary.halfDay = count;
     });
 
-    // 6. Optionally, total records count
     summary.totalRecords = aggregationResult.reduce(
       (sum, cur) => sum + cur.count,
       0
     );
 
-    // 7. Send response
     res.status(200).json({
       labourerId,
       summary,
@@ -549,17 +503,16 @@ export const getLabourerAttendanceSummary = catchAsyncHandler(
   }
 );
 
+//Function to get Attendance Summary for a project (Total present, absent, halfday)
 export const getProjectAttendanceSummary = catchAsyncHandler(
   async (req, res, next) => {
     const { projectId } = req.params;
     const { startDate, endDate } = req.query;
 
-    // 1. Validate projectId
     if (!mongoose.Types.ObjectId.isValid(projectId)) {
       return next(new ApiError(400, "Invalid project ID"));
     }
 
-    // 2. Build date filter if provided
     const dateFilter = {};
     if (startDate) {
       const start = new Date(startDate);
@@ -576,13 +529,13 @@ export const getProjectAttendanceSummary = catchAsyncHandler(
       dateFilter.$lte = end;
     }
 
-    // 3. Build match condition
-    const matchCondition = { projectId: mongoose.Types.ObjectId(projectId) };
+    const matchCondition = {
+      projectId: new mongoose.Types.ObjectId(projectId),
+    };
     if (startDate || endDate) {
       matchCondition.date = dateFilter;
     }
 
-    // 4. Aggregate attendance counts by status
     const aggregationResult = await Attendance.aggregate([
       { $match: matchCondition },
       {
@@ -593,7 +546,6 @@ export const getProjectAttendanceSummary = catchAsyncHandler(
       },
     ]);
 
-    // 5. Format result into summary object
     const summary = {
       present: 0,
       absent: 0,
@@ -606,7 +558,6 @@ export const getProjectAttendanceSummary = catchAsyncHandler(
       else if (_id === "half-day") summary.halfDay = count;
     });
 
-    // Optionally total count for all statuses
     summary.totalRecords = aggregationResult.reduce(
       (sum, cur) => sum + cur.count,
       0
@@ -621,18 +572,16 @@ export const getProjectAttendanceSummary = catchAsyncHandler(
   }
 );
 
-// Bulk Add Attendance
+// Function to Bulk Add Attendance
 export const bulkAddAttendance = catchAsyncHandler(async (req, res, next) => {
   const { attendanceRecords } = req.body;
 
-  // 1. Input must be array
   if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
     return next(
       new ApiError(400, "attendanceRecords must be a non-empty array")
     );
   }
 
-  // 2. Build an array of valid records & track errors
   const validRecords = [];
   const errors = [];
 
@@ -691,14 +640,12 @@ export const bulkAddAttendance = catchAsyncHandler(async (req, res, next) => {
     );
   }
 
-  // 3. Bulk Insert (ordered: false = continue on error)
   let inserted = [];
   let failed = [...errors];
 
   try {
     inserted = await Attendance.insertMany(validRecords, { ordered: false });
   } catch (err) {
-    // Find duplicate or validation errors in err.writeErrors
     if (err && err.writeErrors) {
       for (const we of err.writeErrors) {
         failed.push({
@@ -707,10 +654,9 @@ export const bulkAddAttendance = catchAsyncHandler(async (req, res, next) => {
           record: validRecords[we.index],
         });
       }
-      // Successfully inserted docs are in err.result.result.nInserted
+
       inserted = inserted.concat(err.result.insertedDocs || []);
     } else {
-      // Unexpected error
       return next(
         new ApiError(500, "Bulk insert failed: " + (err.message || err))
       );
@@ -725,12 +671,12 @@ export const bulkAddAttendance = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
+// Function to Download Bulk Attendance between a period
 export const bulkDownloadAttendance = catchAsyncHandler(
   async (req, res, next) => {
     let { projectId, labourerId, status, shift, markedBy, startDate, endDate } =
       req.query;
 
-    // Build filters (same as listAttendance)
     const filters = {};
 
     if (labourerId && mongoose.Types.ObjectId.isValid(labourerId))
@@ -755,15 +701,13 @@ export const bulkDownloadAttendance = catchAsyncHandler(
       }
     }
 
-    // Fetch records (no pagination, but limit for sanity)
     const records = await Attendance.find(filters)
-      .limit(10000) // avoid massive downloads; adjust as needed
+      .limit(10000)
       .sort({ date: -1 })
       .populate({ path: "labourerId", select: "fullName contactNumber" })
       .populate({ path: "projectId", select: "name location" })
       .populate({ path: "markedBy", select: "username email" });
 
-    // Prepare for CSV: flatten deeply nested fields
     const flat = records.map((rec) => ({
       Date: rec.date?.toISOString().split("T")[0] || "",
       Shift: rec.shift,
@@ -779,41 +723,34 @@ export const bulkDownloadAttendance = catchAsyncHandler(
 
     const fields = Object.keys(flat[0] || {});
 
-    // CSV Conversion
     const json2csvParser = new Json2csvParser({ fields });
     const csv = json2csvParser.parse(flat);
 
-    // Set response headers for download
     res.header("Content-Type", "text/csv");
     res.attachment(`attendance_export_${Date.now()}.csv`);
     res.status(200).send(csv);
   }
 );
 
+// Attendance Dashboard for Manager/Admin
 export const dashboardStats = catchAsyncHandler(async (req, res, next) => {
-  // 1. Determine date range (default: today)
   let today = new Date();
   const startOfDay = new Date(today.setHours(0, 0, 0, 0));
   const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-  // 2. Get total labourers
   const totalLabourers = await Labourer.countDocuments({ status: "active" });
 
-  // 3. Get today's attendance records
   const todayRecords = await Attendance.find({
     date: { $gte: startOfDay, $lte: endOfDay },
   });
 
-  // 4. Count by status
   const present = todayRecords.filter((r) => r.status === "present").length;
   const absent = todayRecords.filter((r) => r.status === "absent").length;
   const halfDay = todayRecords.filter((r) => r.status === "half-day").length;
 
-  // 5. Calculate attendance percentage
   const attendancePercent =
     totalLabourers > 0 ? (present / totalLabourers) * 100 : 0;
 
-  // Optionally, gather last 7 days trend
   let last7Days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date();
@@ -831,6 +768,6 @@ export const dashboardStats = catchAsyncHandler(async (req, res, next) => {
     absent,
     halfDay,
     attendancePercent: Math.round(attendancePercent * 100) / 100,
-    last7Days, // Array for basic trends (date, present count)
+    last7Days,
   });
 });

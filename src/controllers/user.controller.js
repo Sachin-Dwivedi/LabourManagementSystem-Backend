@@ -2,24 +2,7 @@ import User from "../models/user.model.js";
 import ApiError from "../utils/error.js";
 import catchAsyncHandler from "../middlewares/catchAsyncHandler.js";
 
-const generateAccessAndRefreshTokens = async (userId) => {
-  try {
-    const user = await User.findById(userId);
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
-
-    user.refreshToken = refreshToken;
-    await user.save({ validateBeforeSave: false });
-
-    return { accessToken, refreshToken };
-  } catch (error) {
-    throw new ApiError(
-      500,
-      "Something went wrong while generating referesh and access token"
-    );
-  }
-};
-
+//Function for New User Registration
 export const register = catchAsyncHandler(async (req, res, next) => {
   const { name, email, password, phone, role, username } = req.body;
 
@@ -44,33 +27,25 @@ export const register = catchAsyncHandler(async (req, res, next) => {
     phone,
   });
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id
-  );
+  const refreshToken = await user.generateRefreshToken();
 
-  const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken"
-  );
+  const createdUser = await User.findById(user._id);
 
   if (!createdUser) {
     throw new ApiError(500, "Something went wrong while registering the user");
   }
 
   const options = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-};
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
 
-  return res
-    .status(201)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json({
-      user: createdUser,
-      accessToken,
-    });
+  return res.status(201).cookie("refreshToken", refreshToken, options).json({
+    user: createdUser,
+  });
 });
 
+//Function for User Login
 export const login = catchAsyncHandler(async (req, res, next) => {
   const { email, username, password } = req.body;
 
@@ -92,35 +67,44 @@ export const login = catchAsyncHandler(async (req, res, next) => {
     throw new ApiError(401, "Invalid User Credentials");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id
-  );
+  const refreshToken = await user.generateRefreshToken();
 
-  const loggedInUser = await User.findById(user._id).select(
-    "-password -refreshToken"
-  );
+  const loggedInUser = await User.findById(user._id);
 
   const options = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-};
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  return res.status(200).cookie("refreshToken", refreshToken, options).json({
+    user: loggedInUser,
+    refreshToken,
+  });
+});
+
+//Function to Logout (clear token cookies)
+export const logout = catchAsyncHandler(async (req, res, next) => {
+  const options = {
+    httpOnly: true,
+    expires: new Date(0),
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  console.log(req.cookies.refreshToken);
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json({
-      user: loggedInUser,
-      accessToken,
-      refreshToken,
-    });
+    .clearCookie("refreshToken", options)
+    .json({ message: "Logged Out Successfully" });
 });
 
-export const logout = catchAsyncHandler(async (req, res, next) => {
+//Function to fetch User Details
+export const getCurrentUser = catchAsyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
 
   if (!userId) {
-    return next(new ApiError(401, "User not authenticated"));
+    return next(new ApiError(401, "User Authentication Failed"));
   }
 
   const user = await User.findById(userId);
@@ -129,49 +113,17 @@ export const logout = catchAsyncHandler(async (req, res, next) => {
     return next(new ApiError(404, "User not found"));
   }
 
-  // clear refreshToken from DB
-  user.refreshToken = null;
-  await user.save({ validateBeforeSave: false });
-
-  //clear cookies
-  const options = {
-    httpOnly: true,
-    expires: new Date(0),
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production"
-  };
-
-  return res
-    .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
-    .json({ message: "Logged Out Successfully" });
-});
-
-export const getCurrentUser = catchAsyncHandler(async (req, res, next) => {
-  const userId = req.user?._id;
-
-  if (!userId) {
-    return next(new ApiError(401, "User Authentication Failed"));
-  }
-
-  const user = await User.findById(userId).select("-password -refreshToken");
-
-  if (!user) {
-    return next(new ApiError(404, "User not found"));
-  }
-
   return res.status(200).json({ user });
 });
 
+//Function to Update User Details
 export const updateUser = catchAsyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
   if (!userId) {
     return next(new ApiError(401, "User Authentication Failed"));
   }
 
-  // Allowed fields to update
-  const allowedUpdates = ["name", "phone", "avatar", "username"];
+  const allowedUpdates = ["name", "phone", "username"];
 
   const updates = {};
 
@@ -193,7 +145,6 @@ export const updateUser = catchAsyncHandler(async (req, res, next) => {
     updates.username = updates.username.toLowerCase();
   }
 
-  //Update user document
   const user = await User.findById(userId);
   if (!user) {
     return next(new ApiError(404, "User not found"));
@@ -203,14 +154,12 @@ export const updateUser = catchAsyncHandler(async (req, res, next) => {
 
   await user.save();
 
-  //Exclude sensitive fields in the response
-  const updatedUser = await User.findById(userId).select(
-    "-password -refreshToken"
-  );
+  const updatedUser = await User.findById(userId);
 
   res.status(200).json({ user: updatedUser });
 });
 
+// Function to Change Password
 export const changePassword = catchAsyncHandler(async (req, res, next) => {
   const userId = req.user?._id;
   if (!userId) {
@@ -219,9 +168,11 @@ export const changePassword = catchAsyncHandler(async (req, res, next) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!(currentPassword && newPassword)) {
-  throw new ApiError(400, "Both currentPassword and newPassword are required");
-}
-
+    throw new ApiError(
+      400,
+      "Both currentPassword and newPassword are required"
+    );
+  }
 
   const user = await User.findById(userId).select("+password");
 
@@ -241,46 +192,35 @@ export const changePassword = catchAsyncHandler(async (req, res, next) => {
   return res.status(200).json({ message: "Password changed successfully" });
 });
 
+// Function to List all Users (Access : Admin Only)
 export const listAllUsers = catchAsyncHandler(async (req, res, next) => {
   const userId = req.user._id;
   if (!userId) {
     throw new ApiError(401, "User Authentication failed");
   }
 
-  // 1. Check if user is admin
-
   if (req.user.role !== "admin") {
     throw new ApiError(403, "Unauthorized Access: Access denied. Admins only.");
   }
 
-  // 2. Parse pagination and filters from query parameters
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 20;
   const skip = (page - 1) * limit;
 
-  // Optional filters example: ?role=manager&username=john
   const filters = {};
   if (req.query.role) filters.role = req.query.role.toLowerCase();
   if (req.query.username)
-    filters.username = new RegExp(req.query.username, "i"); //case-insensitive search
+    filters.username = new RegExp(req.query.username, "i");
 
   if (req.query.status) filters.status = req.query.status.toLowerCase();
 
-  // 3. Fetch users with filters, pagination, exlude sensitive fields
-
   const [totalUsers, users] = await Promise.all([
     User.countDocuments(filters),
-    User.find(filters)
-      .select("-password -refreshToken")
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 }), //newest first
+    User.find(filters).skip(skip).limit(limit).sort({ createdAt: -1 }),
   ]);
 
-  // 4. Calculate total pages
   const totalPages = Math.ceil(totalUsers / limit);
 
-  // 5. Return paginated response
   res.status(200).json({
     meta: {
       totalUsers,
@@ -292,15 +232,14 @@ export const listAllUsers = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
+// Update Role of A User (Access : Admin Only)
 const ALLOWED_ROLES = ["admin", "manager", "labourer"];
 
 export const updateUserRole = catchAsyncHandler(async (req, res, next) => {
-  // 1. Authorization check
   if (req.user.role !== "admin") {
     return next(new ApiError(403, "Access denied. Admins only."));
   }
 
-  // 2. Extract inputs
   const { userId, newRole } = req.body;
 
   if (!userId || !newRole) {
@@ -313,20 +252,15 @@ export const updateUserRole = catchAsyncHandler(async (req, res, next) => {
     );
   }
 
-  // 3. Find target user
   const targetUser = await User.findById(userId);
   if (!targetUser) {
     return next(new ApiError(404, "User not found"));
   }
 
-  // 4. Update role
   targetUser.role = newRole.toLowerCase();
   await targetUser.save();
 
-  // 5. Return updated user info without sensitive fields
-  const updatedUser = await User.findById(userId).select(
-    "-password -refreshToken"
-  );
+  const updatedUser = await User.findById(userId);
 
   res.status(200).json({
     message: "User role updated successfully",
@@ -334,31 +268,24 @@ export const updateUserRole = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
+//Function to delete User (Access : Admin Only)
 export const deleteUser = catchAsyncHandler(async (req, res, next) => {
-  // 1. Authorization check (admin only)
   if (req.user.role !== "admin") {
     return next(new ApiError(403, "Access denied. Admins only."));
   }
 
-
-  // 2. Get userId to delete from params or body
-  const { userId } = req.params; // Or req.body.userId as per your routing
+  const { userId } = req.params;
 
   if (!userId) {
     return next(new ApiError(400, "User ID is required"));
   }
 
-  // 3. Find user
   const user = await User.findById(userId);
   if (!user) {
     return next(new ApiError(404, "User not found"));
   }
 
-  // 4. Delete user
   await User.findByIdAndDelete(userId);
 
-  // 5. Optionally, delete related entities here...
-
-  // 6. Send success response
   res.status(200).json({ message: "User deleted successfully" });
 });

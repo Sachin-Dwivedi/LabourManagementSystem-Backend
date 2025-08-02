@@ -29,7 +29,7 @@ const attendanceSchema = new mongoose.Schema(
     markedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-    }
+    },
   },
   { timestamps: true }
 );

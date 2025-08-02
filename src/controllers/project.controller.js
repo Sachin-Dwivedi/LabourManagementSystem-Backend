@@ -3,6 +3,7 @@ import ApiError from "../utils/error.js";
 import catchAsyncHandler from "../middlewares/catchAsyncHandler.js";
 import mongoose from "mongoose";
 
+//Function to Create a Project
 export const createProject = catchAsyncHandler(async (req, res, next) => {
   const {
     name,
@@ -15,22 +16,20 @@ export const createProject = catchAsyncHandler(async (req, res, next) => {
     assignedLabourers,
   } = req.body;
 
-  // 1. Validate required fields
   if (!name || !description || !location) {
-    return next(new ApiError(400, "Please provide name, description, and location"));
+    return next(
+      new ApiError(400, "Please provide name, description, and location")
+    );
   }
 
-  // 2. Validate dates logic
   if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
     return next(new ApiError(400, "startDate cannot be after endDate"));
   }
 
-  // 3. Validate managerId if provided
   if (managerId && !mongoose.Types.ObjectId.isValid(managerId)) {
     return next(new ApiError(400, "Invalid managerId"));
   }
 
-  // 4. Validate assignedLabourers if provided
   if (assignedLabourers) {
     if (!Array.isArray(assignedLabourers)) {
       return next(new ApiError(400, "assignedLabourers must be an array"));
@@ -38,13 +37,15 @@ export const createProject = catchAsyncHandler(async (req, res, next) => {
     for (const labourerId of assignedLabourers) {
       if (!mongoose.Types.ObjectId.isValid(labourerId)) {
         return next(
-          new ApiError(400, `Invalid labourer ID in assignedLabourers: ${labourerId}`)
+          new ApiError(
+            400,
+            `Invalid labourer ID in assignedLabourers: ${labourerId}`
+          )
         );
       }
     }
   }
 
-  // 5. Create the project
   const newProject = await Project.create({
     name,
     description,
@@ -56,10 +57,10 @@ export const createProject = catchAsyncHandler(async (req, res, next) => {
     assignedLabourers,
   });
 
-  // 6. Return created project
   res.status(201).json({ project: newProject });
 });
 
+//Function to Update Project Details
 export const updateProject = catchAsyncHandler(async (req, res, next) => {
   const projectId = req.params.id;
 
@@ -85,11 +86,18 @@ export const updateProject = catchAsyncHandler(async (req, res, next) => {
     }
   });
 
-  if (updates.startDate && updates.endDate && new Date(updates.startDate) > new Date(updates.endDate)) {
+  if (
+    updates.startDate &&
+    updates.endDate &&
+    new Date(updates.startDate) > new Date(updates.endDate)
+  ) {
     return next(new ApiError(400, "startDate cannot be after endDate"));
   }
 
-  if (updates.managerId && !mongoose.Types.ObjectId.isValid(updates.managerId)) {
+  if (
+    updates.managerId &&
+    !mongoose.Types.ObjectId.isValid(updates.managerId)
+  ) {
     return next(new ApiError(400, "Invalid managerId"));
   }
 
@@ -115,6 +123,7 @@ export const updateProject = catchAsyncHandler(async (req, res, next) => {
   res.status(200).json({ project });
 });
 
+//Function to List All Current Projects
 export const getAllProjects = catchAsyncHandler(async (req, res, next) => {
   let {
     status,
@@ -134,10 +143,19 @@ export const getAllProjects = catchAsyncHandler(async (req, res, next) => {
   const filters = {};
 
   if (status) {
-    const allowedStatuses = ["active", "completed", "pending", "cancelled", "archived"];
+    const allowedStatuses = [
+      "active",
+      "completed",
+      "pending",
+      "cancelled",
+      "archived",
+    ];
     if (!allowedStatuses.includes(status.toLowerCase())) {
       return next(
-        new ApiError(400, `Invalid status filter. Allowed: ${allowedStatuses.join(", ")}`)
+        new ApiError(
+          400,
+          `Invalid status filter. Allowed: ${allowedStatuses.join(", ")}`
+        )
       );
     }
     filters.status = status.toLowerCase();
@@ -195,6 +213,7 @@ export const getAllProjects = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
+//Function to Fetch Project Details By ID
 export const getProjectById = catchAsyncHandler(async (req, res, next) => {
   const projectId = req.params.id;
 
@@ -213,68 +232,82 @@ export const getProjectById = catchAsyncHandler(async (req, res, next) => {
   res.status(200).json({ project });
 });
 
+// Function to assign Multiple Labourers all at once
+export const assignLabourersToProject = catchAsyncHandler(
+  async (req, res, next) => {
+    const projectId = req.params.id;
+    const { assignedLabourers } = req.body;
 
-export const assignLabourersToProject = catchAsyncHandler(async (req, res, next) => {
-  const projectId = req.params.id;
-  const { assignedLabourers } = req.body;
-
-  if (!mongoose.Types.ObjectId.isValid(projectId)) {
-    return next(new ApiError(400, "Invalid project ID"));
-  }
-
-  if (!Array.isArray(assignedLabourers)) {
-    return next(new ApiError(400, "assignedLabourers must be an array"));
-  }
-
-  for (const labourerId of assignedLabourers) {
-    if (!mongoose.Types.ObjectId.isValid(labourerId)) {
-      return next(new ApiError(400, `Invalid labourer ID: ${labourerId}`));
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return next(new ApiError(400, "Invalid project ID"));
     }
+
+    if (!Array.isArray(assignedLabourers)) {
+      return next(new ApiError(400, "assignedLabourers must be an array"));
+    }
+
+    for (const labourerId of assignedLabourers) {
+      if (!mongoose.Types.ObjectId.isValid(labourerId)) {
+        return next(new ApiError(400, `Invalid labourer ID: ${labourerId}`));
+      }
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return next(new ApiError(404, "Project not found"));
+    }
+
+    project.assignedLabourers = assignedLabourers.map(
+      (id) => new mongoose.Types.ObjectId(id)
+    );
+    await project.save();
+
+    const updatedProject = await Project.findById(projectId)
+      .populate({ path: "assignedLabourers", select: "fullName contactNumber" })
+      .populate({ path: "managerId", select: "username email" });
+
+    res.status(200).json({ project: updatedProject });
   }
+);
 
-  const project = await Project.findById(projectId);
-  if (!project) {
-    return next(new ApiError(404, "Project not found"));
+//Function to Change Manager of a Project
+export const changeProjectManager = catchAsyncHandler(
+  async (req, res, next) => {
+    const projectId = req.params.id;
+    const { managerId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(projectId)) {
+      return next(new ApiError(400, "Invalid project ID"));
+    }
+
+    if (
+      managerId !== undefined &&
+      managerId !== null &&
+      !mongoose.Types.ObjectId.isValid(managerId)
+    ) {
+      return next(new ApiError(400, "Invalid managerId"));
+    }
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return next(new ApiError(404, "Project not found"));
+    }
+
+    project.managerId = managerId ?? null;
+    await project.save();
+
+    const updatedProject = await Project.findById(projectId)
+      .populate({ path: "managerId", select: "username email" })
+      .populate({
+        path: "assignedLabourers",
+        select: "fullName contactNumber",
+      });
+
+    res.status(200).json({ project: updatedProject });
   }
+);
 
-  project.assignedLabourers = assignedLabourers.map(id => new mongoose.Types.ObjectId(id));
-  await project.save();
-
-  // Fetch updated project with populated fields
-  const updatedProject = await Project.findById(projectId)
-    .populate({ path: "assignedLabourers", select: "fullName contactNumber" })
-    .populate({ path: "managerId", select: "username email" });
-
-  res.status(200).json({ project: updatedProject });
-});
-
-export const changeProjectManager = catchAsyncHandler(async (req, res, next) => {
-  const projectId = req.params.id;
-  const { managerId } = req.body;
-
-  if (!mongoose.Types.ObjectId.isValid(projectId)) {
-    return next(new ApiError(400, "Invalid project ID"));
-  }
-
-  if (managerId !== undefined && managerId !== null && !mongoose.Types.ObjectId.isValid(managerId)) {
-    return next(new ApiError(400, "Invalid managerId"));
-  }
-
-  const project = await Project.findById(projectId);
-  if (!project) {
-    return next(new ApiError(404, "Project not found"));
-  }
-
-  project.managerId = managerId ?? null;
-  await project.save();
-
-  const updatedProject = await Project.findById(projectId)
-    .populate({ path: "managerId", select: "username email" })
-    .populate({ path: "assignedLabourers", select: "fullName contactNumber" });
-
-  res.status(200).json({ project: updatedProject });
-});
-
+//Function to Delete A Project
 export const deleteProject = catchAsyncHandler(async (req, res, next) => {
   const projectId = req.params.id;
   const { action } = req.body;
@@ -291,17 +324,16 @@ export const deleteProject = catchAsyncHandler(async (req, res, next) => {
   if (action && action.toLowerCase() === "archive") {
     project.status = "archived";
     await project.save();
-    return res.status(200).json({
-      message: "Project archived successfully",
-      project,
-    });
   }
 
+  console.log("About to delete project with ID:", projectId);
   await Project.findByIdAndDelete(projectId);
+  console.log("Project deletion done");
 
   return res.status(200).json({ message: "Project deleted successfully" });
 });
 
+// Function to Change Project Status
 export const changeProjectStatus = catchAsyncHandler(async (req, res, next) => {
   const projectId = req.params.id;
   const { status } = req.body;
@@ -310,10 +342,19 @@ export const changeProjectStatus = catchAsyncHandler(async (req, res, next) => {
     return next(new ApiError(400, "Invalid project ID"));
   }
 
-  const allowedStatuses = ["active", "completed", "pending", "cancelled", "archived"];
+  const allowedStatuses = [
+    "active",
+    "completed",
+    "pending",
+    "cancelled",
+    "archived",
+  ];
   if (!status || !allowedStatuses.includes(status.toLowerCase())) {
     return next(
-      new ApiError(400, `Status is required and must be one of: ${allowedStatuses.join(", ")}`)
+      new ApiError(
+        400,
+        `Status is required and must be one of: ${allowedStatuses.join(", ")}`
+      )
     );
   }
 
@@ -332,6 +373,7 @@ export const changeProjectStatus = catchAsyncHandler(async (req, res, next) => {
   res.status(200).json({ project: updatedProject });
 });
 
+// Search for Project Details based on given Queries
 export const searchProjects = catchAsyncHandler(async (req, res, next) => {
   let {
     name,
@@ -356,9 +398,20 @@ export const searchProjects = catchAsyncHandler(async (req, res, next) => {
   if (location) filters.location = { $regex: location, $options: "i" };
 
   if (status) {
-    const allowedStatuses = ["active", "completed", "pending", "cancelled", "archived"];
+    const allowedStatuses = [
+      "active",
+      "completed",
+      "pending",
+      "cancelled",
+      "archived",
+    ];
     if (!allowedStatuses.includes(status.toLowerCase())) {
-      return next(new ApiError(400, `Invalid status. Allowed: ${allowedStatuses.join(", ")}`));
+      return next(
+        new ApiError(
+          400,
+          `Invalid status. Allowed: ${allowedStatuses.join(", ")}`
+        )
+      );
     }
     filters.status = status.toLowerCase();
   }
@@ -405,70 +458,79 @@ export const searchProjects = catchAsyncHandler(async (req, res, next) => {
   });
 });
 
-export const listProjectsByManager = catchAsyncHandler(async (req, res, next) => {
-  const { managerId } = req.params;
-  let { page = 1, limit = 20 } = req.query;
+// Function to List down projects assigned to a Manager
+export const listProjectsByManager = catchAsyncHandler(
+  async (req, res, next) => {
+    const { managerId } = req.params;
+    let { page = 1, limit = 20 } = req.query;
 
-  if (!mongoose.Types.ObjectId.isValid(managerId)) {
-    return next(new ApiError(400, "Invalid manager ID"));
+    if (!mongoose.Types.ObjectId.isValid(managerId)) {
+      return next(new ApiError(400, "Invalid manager ID"));
+    }
+
+    page = parseInt(page, 10) > 0 ? parseInt(page, 10) : 1;
+    limit = parseInt(limit, 10) > 0 ? parseInt(limit, 10) : 20;
+    const skip = (page - 1) * limit;
+
+    const filter = { managerId };
+
+    const totalProjects = await Project.countDocuments(filter);
+    const projects = await Project.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "assignedLabourers",
+        select: "fullName contactNumber",
+      });
+
+    const totalPages = Math.ceil(totalProjects / limit);
+
+    res.status(200).json({
+      meta: {
+        totalProjects,
+        totalPages,
+        currentPage: page,
+        pageSize: projects.length,
+      },
+      projects,
+    });
   }
+);
 
-  page = parseInt(page, 10) > 0 ? parseInt(page, 10) : 1;
-  limit = parseInt(limit, 10) > 0 ? parseInt(limit, 10) : 20;
-  const skip = (page - 1) * limit;
+//Function to List All Projects assigned to a Labourer
+export const listProjectsByLabourer = catchAsyncHandler(
+  async (req, res, next) => {
+    const { labourerId } = req.params;
+    let { page = 1, limit = 20 } = req.query;
 
-  const filter = { managerId };
+    if (!mongoose.Types.ObjectId.isValid(labourerId)) {
+      return next(new ApiError(400, "Invalid labourer ID"));
+    }
 
-  const totalProjects = await Project.countDocuments(filter);
-  const projects = await Project.find(filter)
-    .skip(skip)
-    .limit(limit)
-    .sort({ createdAt: -1 })
-    .populate({ path: "assignedLabourers", select: "fullName contactNumber" });
+    page = parseInt(page, 10) > 0 ? Number(page) : 1;
+    limit = parseInt(limit, 10) > 0 ? Number(limit) : 20;
+    const skip = (page - 1) * limit;
 
-  const totalPages = Math.ceil(totalProjects / limit);
+    const filter = { assignedLabourers: labourerId };
 
-  res.status(200).json({
-    meta: {
-      totalProjects,
-      totalPages,
-      currentPage: page,
-      pageSize: projects.length,
-    },
-    projects,
-  });
-});
+    const totalProjects = await Project.countDocuments(filter);
+    const projects = await Project.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 })
+      .populate({ path: "managerId", select: "username email" });
 
-export const listProjectsByLabourer = catchAsyncHandler(async (req, res, next) => {
-  const { labourerId } = req.params;
-  let { page = 1, limit = 20 } = req.query;
+    const totalPages = Math.ceil(totalProjects / limit);
 
-  if (!mongoose.Types.ObjectId.isValid(labourerId)) {
-    return next(new ApiError(400, "Invalid labourer ID"));
+    res.status(200).json({
+      meta: {
+        totalProjects,
+        totalPages,
+        currentPage: page,
+        pageSize: projects.length,
+      },
+      projects,
+    });
   }
-
-  page = parseInt(page, 10) > 0 ? Number(page) : 1;
-  limit = parseInt(limit, 10) > 0 ? Number(limit) : 20;
-  const skip = (page - 1) * limit;
-
-  const filter = { assignedLabourers: labourerId };
-
-  const totalProjects = await Project.countDocuments(filter);
-  const projects = await Project.find(filter)
-    .skip(skip)
-    .limit(limit)
-    .sort({ createdAt: -1 })
-    .populate({ path: "managerId", select: "username email" });
-
-  const totalPages = Math.ceil(totalProjects / limit);
-
-  res.status(200).json({
-    meta: {
-      totalProjects,
-      totalPages,
-      currentPage: page,
-      pageSize: projects.length,
-    },
-    projects,
-  });
-});
+);

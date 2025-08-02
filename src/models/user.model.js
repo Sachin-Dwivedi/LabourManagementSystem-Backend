@@ -1,4 +1,4 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -31,10 +31,6 @@ const userSchema = new mongoose.Schema(
       enum: ["admin", "manager", "labourer"],
       default: "labourer",
     },
-    refreshToken: {
-      type: String,
-      select: false, // Do not return this field by default
-    },
     status: {
       type: String,
       enum: ["active", "inactive"],
@@ -56,22 +52,6 @@ userSchema.pre("save", async function (next) {
 
 userSchema.methods.comparePassword = async function (password) {
   return await bcrypt.compare(password, this.password);
-};
-
-userSchema.methods.generateAccessToken = function () {
-  return jwt.sign(
-    {
-      _id: this._id,
-      email: this.email,
-      username: this.username,
-      name: this.name,
-      role: this.role,
-    },
-    process.env.ACCESS_TOKEN_SECRET,
-    {
-      expiresIn: process.env.ACCESS_TOKEN_EXPIRES * 24 * 60 * 60 * 1000,
-    }
-  );
 };
 
 userSchema.methods.generateRefreshToken = function () {

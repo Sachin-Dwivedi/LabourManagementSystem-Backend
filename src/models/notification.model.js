@@ -13,7 +13,7 @@ const notificationsSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["email", "sms"], // you can extend this
+      enum: ["email", "sms"],
       required: [true, "Notification type is Required"],
     },
     status: {
@@ -21,7 +21,7 @@ const notificationsSchema = new mongoose.Schema(
       enum: ["sent", "failed", "read"],
       required: [true, "Status is Required"],
     },
-    // Optional fields for better tracking:
+
     sentAt: {
       type: Date,
     },
@@ -30,10 +30,9 @@ const notificationsSchema = new mongoose.Schema(
       default: 0,
     },
     deleted: {
-  type: Boolean,
-  default: false,
-}
-
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

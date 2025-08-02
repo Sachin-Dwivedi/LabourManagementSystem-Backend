@@ -18,7 +18,6 @@ const projectSchema = new mongoose.Schema(
       type: Date,
       validate: {
         validator: function (value) {
-          // Ensure startDate <= endDate if endDate is set
           return !this.endDate || value <= this.endDate;
         },
         message: "Start date must be less than or equal to end date",
@@ -37,22 +36,24 @@ const projectSchema = new mongoose.Schema(
       ref: "User",
     },
     assignedLabourers: [
-  {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Labourer"
-  }
-]
-
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Labourer",
+      },
+    ],
   },
   {
-    timestamps: true, // adds createdAt and updatedAt automatically
+    timestamps: true,
   }
 );
 
-// Optional instance method to check if project is currently active
 projectSchema.methods.isActive = function () {
   const now = new Date();
-  return this.startDate && this.startDate <= now && (!this.endDate || this.endDate >= now);
+  return (
+    this.startDate &&
+    this.startDate <= now &&
+    (!this.endDate || this.endDate >= now)
+  );
 };
 
 const Project = mongoose.model("Project", projectSchema);

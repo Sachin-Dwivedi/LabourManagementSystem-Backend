@@ -16,7 +16,6 @@ const salarySchema = new mongoose.Schema(
       required: [true, "End period is required"],
       validate: {
         validator: function (value) {
-          // endPeriod must be >= startPeriod
           return !this.startPeriod || value >= this.startPeriod;
         },
         message: "End period must be greater than or equal to start period",
@@ -44,10 +43,10 @@ const salarySchema = new mongoose.Schema(
       default: "pending",
     },
     payslipUrl: {
+      // (Under Development)
       type: String,
-      required: [true, "Pay slip URL is required"],
     },
-    
+
     paymentDate: {
       type: Date,
     },
